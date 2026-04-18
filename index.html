@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>NDA Hypothesis Review — ContractNLI</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -418,72 +419,6 @@
 
     .span-link:hover { color: #1a5fd4; }
 
-    .span-excerpt {
-      background: #fffbea;
-      border-left: 3px solid #f0b429;
-      border-radius: 0 6px 6px 0;
-      padding: 0.6rem 0.875rem;
-      font-size: 0.78rem;
-      line-height: 1.65;
-      color: #333;
-      margin-bottom: 0.6rem;
-    }
-
-    .span-excerpt:last-child { margin-bottom: 0; }
-
-    .span-viewer-wrap {
-      padding: 1rem 1.25rem;
-      overflow-y: auto;
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      gap: 0;
-    }
-
-    .span-viewer-label {
-      font-size: 0.72rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.07em;
-      color: #f0b429;
-      margin-bottom: 0.6rem;
-    }
-
-    .span-back-btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.3rem;
-      font-size: 0.75rem;
-      font-weight: 600;
-      color: #666;
-      background: none;
-      border: 1.5px solid #dde1ea;
-      border-radius: 6px;
-      padding: 3px 9px;
-      cursor: pointer;
-      margin-bottom: 0.75rem;
-      transition: border-color 0.15s, color 0.15s;
-      align-self: flex-start;
-    }
-
-    .span-back-btn:hover { border-color: #3a86ff; color: #3a86ff; }
-
-    .doc-full-text {
-      font-size: 0.78rem;
-      line-height: 1.75;
-      color: #333;
-      white-space: pre-wrap;
-      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
-    }
-
-    mark.span-highlight {
-      background: #fff0a0;
-      color: inherit;
-      border-radius: 2px;
-      padding: 1px 0;
-      outline: 2px solid #f0b429;
-      outline-offset: 1px;
-    }
 
     .empty-state {
       text-align: center;
@@ -557,6 +492,48 @@
       white-space: pre-wrap;
       font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
       flex: 1;
+    }
+
+    /* ── PDF.js viewer ───────────────────────────── */
+    .pdf-viewer-wrap {
+      flex: 1;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 8px;
+      gap: 8px;
+      background: #525659;
+    }
+
+    .pdf-page-wrap {
+      position: relative;
+      flex-shrink: 0;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+    }
+
+    .pdf-page-wrap canvas { display: block; }
+
+    .textLayer {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+      line-height: 1;
+      pointer-events: none;
+    }
+
+    .textLayer > span {
+      color: transparent;
+      position: absolute;
+      white-space: pre;
+      cursor: text;
+      transform-origin: 0% 0%;
+      pointer-events: text;
+    }
+
+    .textLayer > span.pdf-highlight {
+      background: rgba(255, 200, 0, 0.55);
+      border-radius: 2px;
     }
 
     .doc-placeholder {
@@ -760,6 +737,11 @@
 
 <script>
   "use strict";
+
+  if (typeof pdfjsLib !== "undefined") {
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js";
+  }
 
   let appData = null;
   let spansData = {};
@@ -967,11 +949,14 @@
     document.getElementById("results").onclick = e => {
       const btn = e.target.closest(".span-link");
       if (!btn) return;
-      const id   = btn.dataset.ndaId;
-      const file = btn.dataset.file;
+      const id    = btn.dataset.ndaId;
+      const file  = btn.dataset.file;
       const entry = spansData[file];
-      const spans = entry && entry.spans && entry.spans[id];
-      if (spans) renderSpanViewer(spans, appData.labels[id].short_description, file);
+      const offsets = entry && entry.spans && entry.spans[id];
+      if (offsets) {
+        const texts = offsets.map(([s, end]) => entry.text.slice(s, end));
+        renderDocViewer(file, texts);
+      }
     };
 
     document.getElementById("results").innerHTML = `
@@ -1013,7 +998,7 @@
 
   // ── Document viewer ────────────────────────────────────────────────────────
 
-  async function renderDocViewer(fileName) {
+  async function renderDocViewer(fileName, highlightTexts = null) {
     const header = document.getElementById("doc-panel-header");
     const body   = document.getElementById("doc-panel-body");
     const ext    = (fileName.split(".").pop() || "").toLowerCase();
@@ -1025,43 +1010,86 @@
 
     body.innerHTML = `<div class="doc-placeholder"><span class="spinner"></span></div>`;
 
-    // Probe for the file's existence
-    let exists = false;
-    try {
-      const probe = await fetch(url, { method: "HEAD" });
-      exists = probe.ok;
-    } catch (_) { /* network error or CORS — treat as not found */ }
-
-    if (!exists) {
-      body.innerHTML = `
-        <div class="doc-placeholder">
-          <svg width="36" height="36" viewBox="0 0 24 24" fill="none"
-               stroke="currentColor" stroke-width="1.4">
-            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
-            <polyline points="14 2 14 8 20 8"/>
-          </svg>
-          <p>Document not available in this repository.</p>
-          <p>To enable previews, place the original file at<br>
-             <code>raw/${esc(fileName)}</code></p>
-        </div>`;
-      return;
-    }
-
-    if (ext === "pdf") {
-      body.innerHTML =
-        `<iframe src="${esc(url)}" title="${esc(fileName)}"></iframe>`;
-    } else {
-      // Render as plain text (handles .txt, .html, SEC filings, etc.)
+    if (ext !== "pdf") {
       try {
         const r    = await fetch(url);
         const text = await r.text();
-        body.innerHTML =
-          `<div class="doc-text">${esc(text)}</div>`;
+        body.innerHTML = `<div class="doc-text">${esc(text)}</div>`;
       } catch (e) {
-        body.innerHTML =
-          `<div class="doc-placeholder"><p>Failed to load: ${esc(e.message)}</p></div>`;
+        body.innerHTML = `<div class="doc-placeholder"><p>Failed to load: ${esc(e.message)}</p></div>`;
+      }
+      return;
+    }
+
+    // PDF via PDF.js
+    if (typeof pdfjsLib === "undefined") {
+      body.innerHTML = `<iframe src="${esc(url)}" title="${esc(fileName)}"></iframe>`;
+      return;
+    }
+
+    try {
+      const pdf = await pdfjsLib.getDocument(url).promise;
+      const viewer = document.createElement("div");
+      viewer.className = "pdf-viewer-wrap";
+      body.innerHTML = "";
+      body.appendChild(viewer);
+
+      for (let p = 1; p <= pdf.numPages; p++) {
+        const page   = await pdf.getPage(p);
+        const vpBase = page.getViewport({ scale: 1 });
+        const scale  = Math.max(0.6, (body.clientWidth - 16) / vpBase.width);
+        const vp     = page.getViewport({ scale });
+
+        const pageWrap = document.createElement("div");
+        pageWrap.className = "pdf-page-wrap";
+        pageWrap.style.width  = vp.width  + "px";
+        pageWrap.style.height = vp.height + "px";
+
+        const canvas = document.createElement("canvas");
+        canvas.width  = vp.width;
+        canvas.height = vp.height;
+        await page.render({ canvasContext: canvas.getContext("2d"), viewport: vp }).promise;
+        pageWrap.appendChild(canvas);
+
+        const textLayerDiv = document.createElement("div");
+        textLayerDiv.className = "textLayer";
+        const textContent = await page.getTextContent();
+        await pdfjsLib.renderTextLayer({
+          textContent,
+          container: textLayerDiv,
+          viewport: vp,
+          textDivs: [],
+        }).promise;
+        pageWrap.appendChild(textLayerDiv);
+        viewer.appendChild(pageWrap);
+      }
+
+      if (highlightTexts && highlightTexts.length) {
+        highlightInPdf(viewer, highlightTexts);
+      }
+    } catch (e) {
+      body.innerHTML = `<div class="doc-placeholder"><p>Failed to load PDF: ${esc(e.message)}</p></div>`;
+    }
+  }
+
+  function highlightInPdf(container, clauseTexts) {
+    const normClauses = clauseTexts.map(c =>
+      c.replace(/[\s\u00a0]+/g, " ").trim().toLowerCase()
+    );
+    const spans = container.querySelectorAll(".textLayer > span");
+    let first = null;
+    for (const span of spans) {
+      const t = span.textContent.replace(/[\s\u00a0]+/g, " ").trim().toLowerCase();
+      if (t.length < 6) continue;
+      for (const clause of normClauses) {
+        if (clause.includes(t)) {
+          span.classList.add("pdf-highlight");
+          if (!first) first = span;
+          break;
+        }
       }
     }
+    if (first) first.scrollIntoView({ behavior: "smooth", block: "center" });
   }
 
   function resetDocViewer() {
@@ -1078,52 +1106,6 @@
         <p>Select a document to preview it here.</p>
         <p>Place original files in <code>raw/</code> to enable previews.</p>
       </div>`;
-  }
-
-  function renderSpanViewer(spanOffsets, label, fileName) {
-    const body   = document.getElementById("doc-panel-body");
-    const header = document.getElementById("doc-panel-header");
-
-    header.innerHTML = `
-      <span class="doc-panel-title">Source Clauses</span>
-      <span class="doc-ext-tag">${esc(label)}</span>`;
-
-    const docEntry = spansData[fileName];
-    if (!docEntry) return;
-    const fullText = docEntry.text;
-
-    // Build highlighted HTML from char offsets
-    // Sort spans by start offset, merge overlaps just in case
-    const sorted = [...spanOffsets].sort((a, b) => a[0] - b[0]);
-    let html = "";
-    let cursor = 0;
-    for (const [start, end] of sorted) {
-      if (start > cursor) html += esc(fullText.slice(cursor, start));
-      html += `<mark class="span-highlight">${esc(fullText.slice(start, end))}</mark>`;
-      cursor = end;
-    }
-    if (cursor < fullText.length) html += esc(fullText.slice(cursor));
-
-    body.innerHTML = `
-      <div class="span-viewer-wrap">
-        <button class="span-back-btn" id="span-back">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="15 18 9 12 15 6"/>
-          </svg>
-          Back to document
-        </button>
-        <div class="span-viewer-label">${sorted.length} supporting clause${sorted.length !== 1 ? "s" : ""}</div>
-        <div class="doc-full-text">${html}</div>
-      </div>`;
-
-    // Scroll first highlight into view
-    const first = body.querySelector(".span-highlight");
-    if (first) first.scrollIntoView({ behavior: "smooth", block: "center" });
-
-    document.getElementById("span-back").addEventListener("click", () => {
-      renderDocViewer(fileName);
-    });
   }
 
   // ── Upload / comparison ────────────────────────────────────────────────────

@@ -388,6 +388,77 @@
     .match-icon.bad  { color: #c62828; }
     .match-icon.none { color: #ccc; font-weight: 400; }
 
+    .span-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      font-size: 0.7rem;
+      font-weight: 600;
+      color: #3a86ff;
+      background: #eef3ff;
+      border: none;
+      border-radius: 4px;
+      padding: 2px 7px;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.15s, color 0.15s;
+      text-decoration: none;
+    }
+
+    .span-link:hover { background: #dce8ff; color: #1a5fd4; }
+
+    td.col-spans { width: 1%; white-space: nowrap; }
+
+    .span-excerpt {
+      background: #fffbea;
+      border-left: 3px solid #f0b429;
+      border-radius: 0 6px 6px 0;
+      padding: 0.6rem 0.875rem;
+      font-size: 0.78rem;
+      line-height: 1.65;
+      color: #333;
+      margin-bottom: 0.6rem;
+    }
+
+    .span-excerpt:last-child { margin-bottom: 0; }
+
+    .span-viewer-wrap {
+      padding: 1rem 1.25rem;
+      overflow-y: auto;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+    }
+
+    .span-viewer-label {
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: #f0b429;
+      margin-bottom: 0.6rem;
+    }
+
+    .span-back-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: #666;
+      background: none;
+      border: 1.5px solid #dde1ea;
+      border-radius: 6px;
+      padding: 3px 9px;
+      cursor: pointer;
+      margin-bottom: 0.75rem;
+      transition: border-color 0.15s, color 0.15s;
+      align-self: flex-start;
+    }
+
+    .span-back-btn:hover { border-color: #3a86ff; color: #3a86ff; }
+
     .empty-state {
       text-align: center;
       padding: 3.5rem 1rem;
@@ -665,18 +736,21 @@
   "use strict";
 
   let appData = null;
+  let spansData = {};
   let uploadedData = null; // map: nda-id → normalized choice string
 
   // ── Bootstrap ──────────────────────────────────────────────────────────────
 
   async function init() {
-    const [dataResp, manifestResp, wordManifestResp] = await Promise.all([
+    const [dataResp, manifestResp, wordManifestResp, spansResp] = await Promise.all([
       fetch("app_data.json"),
       fetch("raw_manifest.json").catch(() => null),
       fetch("word_manifest.json").catch(() => null),
+      fetch("spans_data.json").catch(() => null),
     ]);
 
     appData = await dataResp.json();
+    spansData = spansResp && spansResp.ok ? await spansResp.json() : {};
 
     let rawSet = null;
     if (manifestResp && manifestResp.ok) {
@@ -780,6 +854,7 @@
     const labels      = appData.labels;
     const ids         = sortedIds(labels);
     const hasUpload   = uploadedData !== null;
+    const docSpans    = (spansData && spansData[fileName]) || {};
 
     let entCount = 0, conCount = 0, notCount = 0;
     let matchCount = 0, totalCompared = 0;
@@ -821,19 +896,28 @@
         }
       }
 
+      const spans = docSpans[id];
+      const spanCell = spans
+        ? `<td class="col-spans"><button class="span-link" data-nda-id="${esc(id)}" data-file="${esc(fileName)}">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10H3M21 6H3M21 14H3M21 18H3"/></svg>
+            View source
+          </button></td>`
+        : `<td class="col-spans"></td>`;
+
       return `<tr class="${rowClass}">
         <td class="desc">${esc(label.short_description)}</td>
         <td class="hypo">${esc(label.hypothesis)}</td>
         <td class="col-choice">
           <span class="choice-badge ${truthCls}">${esc(truth)}</span>
         </td>
-        ${uploadedCell}${matchCell}
+        ${spanCell}${uploadedCell}${matchCell}
       </tr>`;
     }).join("");
 
     const uploadHeaders = hasUpload
       ? "<th>Uploaded</th><th>Match</th>"
       : "";
+    const spanHeader = "<th>Source</th>";
 
     // Accuracy badge
     if (hasUpload && totalCompared > 0) {
@@ -843,6 +927,15 @@
       badge.className   = `accuracy-badge ${pct >= 80 ? "high" : pct >= 60 ? "mid" : "low"}`;
       badge.style.display = "inline-block";
     }
+
+    document.getElementById("results").onclick = e => {
+      const btn = e.target.closest(".span-link");
+      if (!btn) return;
+      const id   = btn.dataset.ndaId;
+      const file = btn.dataset.file;
+      const spans = (spansData[file] || {})[id];
+      if (spans) renderSpanViewer(spans, appData.labels[id].short_description, file);
+    };
 
     document.getElementById("results").innerHTML = `
       <div class="results-header">
@@ -859,7 +952,7 @@
             <th>Short Description</th>
             <th>Hypothesis</th>
             <th>Ground Truth</th>
-            ${uploadHeaders}
+            ${spanHeader}${uploadHeaders}
           </tr>
         </thead>
         <tbody>${rows}</tbody>
@@ -948,6 +1041,36 @@
         <p>Select a document to preview it here.</p>
         <p>Place original files in <code>raw/</code> to enable previews.</p>
       </div>`;
+  }
+
+  function renderSpanViewer(spans, label, fileName) {
+    const body = document.getElementById("doc-panel-body");
+    const header = document.getElementById("doc-panel-header");
+
+    header.innerHTML = `
+      <span class="doc-panel-title">Source Clauses</span>
+      <span class="doc-ext-tag">${esc(label)}</span>`;
+
+    const excerpts = spans.map(s =>
+      `<div class="span-excerpt">${esc(s.trim())}</div>`
+    ).join("");
+
+    body.innerHTML = `
+      <div class="span-viewer-wrap">
+        <button class="span-back-btn" id="span-back">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="15 18 9 12 15 6"/>
+          </svg>
+          Back to document
+        </button>
+        <div class="span-viewer-label">${spans.length} supporting clause${spans.length !== 1 ? "s" : ""}</div>
+        ${excerpts}
+      </div>`;
+
+    document.getElementById("span-back").addEventListener("click", () => {
+      renderDocViewer(fileName);
+    });
   }
 
   // ── Upload / comparison ────────────────────────────────────────────────────

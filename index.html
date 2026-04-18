@@ -315,6 +315,10 @@
       overflow: hidden;
     }
 
+    .results-table-wrap {
+      overflow-x: auto;
+    }
+
     .results-header {
       padding: 0.875rem 1.25rem;
       border-bottom: 1px solid #eef0f5;
@@ -387,6 +391,99 @@
     .match-icon.ok   { color: #2e7d32; }
     .match-icon.bad  { color: #c62828; }
     .match-icon.none { color: #ccc; font-weight: 400; }
+
+    .col-choice-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0.3rem;
+    }
+
+    .span-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.2rem;
+      font-size: 0.68rem;
+      font-weight: 600;
+      color: #3a86ff;
+      background: none;
+      border: none;
+      padding: 0;
+      cursor: pointer;
+      white-space: nowrap;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+      transition: color 0.15s;
+    }
+
+    .span-link:hover { color: #1a5fd4; }
+
+    .span-excerpt {
+      background: #fffbea;
+      border-left: 3px solid #f0b429;
+      border-radius: 0 6px 6px 0;
+      padding: 0.6rem 0.875rem;
+      font-size: 0.78rem;
+      line-height: 1.65;
+      color: #333;
+      margin-bottom: 0.6rem;
+    }
+
+    .span-excerpt:last-child { margin-bottom: 0; }
+
+    .span-viewer-wrap {
+      padding: 1rem 1.25rem;
+      overflow-y: auto;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+    }
+
+    .span-viewer-label {
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: #f0b429;
+      margin-bottom: 0.6rem;
+    }
+
+    .span-back-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: #666;
+      background: none;
+      border: 1.5px solid #dde1ea;
+      border-radius: 6px;
+      padding: 3px 9px;
+      cursor: pointer;
+      margin-bottom: 0.75rem;
+      transition: border-color 0.15s, color 0.15s;
+      align-self: flex-start;
+    }
+
+    .span-back-btn:hover { border-color: #3a86ff; color: #3a86ff; }
+
+    .doc-full-text {
+      font-size: 0.78rem;
+      line-height: 1.75;
+      color: #333;
+      white-space: pre-wrap;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    }
+
+    mark.span-highlight {
+      background: #fff0a0;
+      color: inherit;
+      border-radius: 2px;
+      padding: 1px 0;
+      outline: 2px solid #f0b429;
+      outline-offset: 1px;
+    }
 
     .empty-state {
       text-align: center;
@@ -665,18 +762,21 @@
   "use strict";
 
   let appData = null;
+  let spansData = {};
   let uploadedData = null; // map: nda-id → normalized choice string
 
   // ── Bootstrap ──────────────────────────────────────────────────────────────
 
   async function init() {
-    const [dataResp, manifestResp, wordManifestResp] = await Promise.all([
+    const [dataResp, manifestResp, wordManifestResp, spansResp] = await Promise.all([
       fetch("app_data.json"),
       fetch("raw_manifest.json").catch(() => null),
       fetch("word_manifest.json").catch(() => null),
+      fetch("spans_data.json").catch(() => null),
     ]);
 
     appData = await dataResp.json();
+    spansData = spansResp && spansResp.ok ? await spansResp.json() : {};
 
     let rawSet = null;
     if (manifestResp && manifestResp.ok) {
@@ -743,6 +843,14 @@
 
     select.addEventListener("change", () => {
       const v = select.value;
+      // Clear any pasted/uploaded results when switching document
+      if (uploadedData !== null) {
+        uploadedData = null;
+        const badge = document.getElementById("accuracy-badge");
+        badge.style.display = "none";
+        badge.textContent = "";
+        closePastePanel();
+      }
       if (v) {
         renderTable(v);
         renderDocViewer(v);
@@ -780,6 +888,7 @@
     const labels      = appData.labels;
     const ids         = sortedIds(labels);
     const hasUpload   = uploadedData !== null;
+    const docSpans    = (spansData && spansData[fileName] && spansData[fileName].spans) || {};
 
     let entCount = 0, conCount = 0, notCount = 0;
     let matchCount = 0, totalCompared = 0;
@@ -821,11 +930,22 @@
         }
       }
 
+      const spans = docSpans[id];
+      const spanLink = spans
+        ? `<button class="span-link" data-nda-id="${esc(id)}" data-file="${esc(fileName)}">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10H3M21 6H3M21 14H3M21 18H3"/></svg>
+            View source
+          </button>`
+        : "";
+
       return `<tr class="${rowClass}">
         <td class="desc">${esc(label.short_description)}</td>
         <td class="hypo">${esc(label.hypothesis)}</td>
         <td class="col-choice">
-          <span class="choice-badge ${truthCls}">${esc(truth)}</span>
+          <div class="col-choice-wrap">
+            <span class="choice-badge ${truthCls}">${esc(truth)}</span>
+            ${spanLink}
+          </div>
         </td>
         ${uploadedCell}${matchCell}
       </tr>`;
@@ -844,6 +964,16 @@
       badge.style.display = "inline-block";
     }
 
+    document.getElementById("results").onclick = e => {
+      const btn = e.target.closest(".span-link");
+      if (!btn) return;
+      const id   = btn.dataset.ndaId;
+      const file = btn.dataset.file;
+      const entry = spansData[file];
+      const spans = entry && entry.spans && entry.spans[id];
+      if (spans) renderSpanViewer(spans, appData.labels[id].short_description, file);
+    };
+
     document.getElementById("results").innerHTML = `
       <div class="results-header">
         <span class="results-title">${esc(fileName)}</span>
@@ -853,7 +983,7 @@
           <span class="pill n">${notCount} Not Mentioned</span>
         </div>
       </div>
-      <table>
+      <div class="results-table-wrap"><table>
         <thead>
           <tr>
             <th>Short Description</th>
@@ -863,7 +993,7 @@
           </tr>
         </thead>
         <tbody>${rows}</tbody>
-      </table>`;
+      </table></div>`;
   }
 
   function resetTable() {
@@ -948,6 +1078,52 @@
         <p>Select a document to preview it here.</p>
         <p>Place original files in <code>raw/</code> to enable previews.</p>
       </div>`;
+  }
+
+  function renderSpanViewer(spanOffsets, label, fileName) {
+    const body   = document.getElementById("doc-panel-body");
+    const header = document.getElementById("doc-panel-header");
+
+    header.innerHTML = `
+      <span class="doc-panel-title">Source Clauses</span>
+      <span class="doc-ext-tag">${esc(label)}</span>`;
+
+    const docEntry = spansData[fileName];
+    if (!docEntry) return;
+    const fullText = docEntry.text;
+
+    // Build highlighted HTML from char offsets
+    // Sort spans by start offset, merge overlaps just in case
+    const sorted = [...spanOffsets].sort((a, b) => a[0] - b[0]);
+    let html = "";
+    let cursor = 0;
+    for (const [start, end] of sorted) {
+      if (start > cursor) html += esc(fullText.slice(cursor, start));
+      html += `<mark class="span-highlight">${esc(fullText.slice(start, end))}</mark>`;
+      cursor = end;
+    }
+    if (cursor < fullText.length) html += esc(fullText.slice(cursor));
+
+    body.innerHTML = `
+      <div class="span-viewer-wrap">
+        <button class="span-back-btn" id="span-back">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="15 18 9 12 15 6"/>
+          </svg>
+          Back to document
+        </button>
+        <div class="span-viewer-label">${sorted.length} supporting clause${sorted.length !== 1 ? "s" : ""}</div>
+        <div class="doc-full-text">${html}</div>
+      </div>`;
+
+    // Scroll first highlight into view
+    const first = body.querySelector(".span-highlight");
+    if (first) first.scrollIntoView({ behavior: "smooth", block: "center" });
+
+    document.getElementById("span-back").addEventListener("click", () => {
+      renderDocViewer(fileName);
+    });
   }
 
   // ── Upload / comparison ────────────────────────────────────────────────────

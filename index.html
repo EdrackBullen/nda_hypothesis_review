@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>NDA Hypothesis Review</title>
+  <title>NDA Hypothesis Review — ContractNLI</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -12,93 +12,112 @@
       background: #f5f6fa;
       color: #1a1a2e;
       min-height: 100vh;
+      display: flex;
+      flex-direction: column;
     }
 
+    /* ── Header ─────────────────────────────────── */
     header {
       background: #1a1a2e;
       color: #fff;
-      padding: 1.25rem 2rem;
+      padding: 1rem 2rem;
       display: flex;
       align-items: center;
       gap: 0.75rem;
+      flex-shrink: 0;
     }
 
-    header h1 {
-      font-size: 1.25rem;
-      font-weight: 600;
-      letter-spacing: -0.01em;
-    }
+    header h1 { font-size: 1.15rem; font-weight: 600; letter-spacing: -0.01em; }
 
-    header span.badge {
-      font-size: 0.7rem;
+    .badge {
+      font-size: 0.68rem;
       background: #3a86ff;
       border-radius: 4px;
       padding: 2px 7px;
-      font-weight: 500;
-      letter-spacing: 0.04em;
+      font-weight: 600;
+      letter-spacing: 0.05em;
       text-transform: uppercase;
     }
 
-    main {
-      max-width: 1100px;
-      margin: 2rem auto;
-      padding: 0 1.5rem;
+    /* ── Attribution bar ─────────────────────────── */
+    .attribution-bar {
+      background: #fff8e1;
+      border-bottom: 1px solid #ffe082;
+      padding: 0.45rem 2rem;
+      font-size: 0.78rem;
+      color: #5d4037;
+      flex-shrink: 0;
+      line-height: 1.5;
     }
 
+    .attribution-bar a { color: #1565c0; text-decoration: none; font-weight: 600; }
+    .attribution-bar a:hover { text-decoration: underline; }
+
+    /* ── Loading ─────────────────────────────────── */
     #loading {
-      text-align: center;
-      padding: 4rem;
-      color: #666;
-      font-size: 1rem;
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.6rem;
+      color: #888;
+      font-size: 0.9rem;
     }
 
     .spinner {
-      display: inline-block;
-      width: 24px;
-      height: 24px;
+      width: 20px; height: 20px;
       border: 3px solid #ddd;
       border-top-color: #3a86ff;
       border-radius: 50%;
       animation: spin 0.7s linear infinite;
-      vertical-align: middle;
-      margin-right: 0.5rem;
+      flex-shrink: 0;
     }
 
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    .controls {
-      background: #fff;
-      border-radius: 10px;
-      padding: 1.25rem 1.5rem;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
-      margin-bottom: 1.5rem;
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
+    /* ── App shell ───────────────────────────────── */
+    #app {
+      display: none;
+      flex: 1;
+      flex-direction: column;
+      padding: 1.25rem 1.5rem 1.5rem;
       gap: 1rem;
     }
 
-    .controls label {
+    /* ── Controls ────────────────────────────────── */
+    .controls {
+      background: #fff;
+      border-radius: 10px;
+      padding: 0.875rem 1.25rem;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .ctrl-label {
+      font-size: 0.8rem;
       font-weight: 600;
-      font-size: 0.875rem;
+      color: #666;
       white-space: nowrap;
     }
 
-    .select-wrapper {
+    .select-wrap {
       position: relative;
       flex: 1;
-      min-width: 220px;
+      min-width: 200px;
     }
 
-    .select-wrapper::after {
+    .select-wrap::after {
       content: "▾";
       position: absolute;
       right: 0.75rem;
       top: 50%;
       transform: translateY(-50%);
       pointer-events: none;
-      color: #555;
-      font-size: 0.8rem;
+      color: #888;
+      font-size: 0.75rem;
     }
 
     select {
@@ -107,8 +126,8 @@
       background: #f5f6fa;
       border: 1.5px solid #dde1ea;
       border-radius: 7px;
-      padding: 0.55rem 2.25rem 0.55rem 0.85rem;
-      font-size: 0.875rem;
+      padding: 0.48rem 2rem 0.48rem 0.8rem;
+      font-size: 0.85rem;
       color: #1a1a2e;
       cursor: pointer;
       outline: none;
@@ -117,219 +136,528 @@
 
     select:focus { border-color: #3a86ff; background: #fff; }
 
-    .doc-count {
+    .doc-count { font-size: 0.76rem; color: #aaa; white-space: nowrap; }
+
+    .vr { width: 1px; height: 22px; background: #e2e5ec; flex-shrink: 0; }
+
+    /* Upload button */
+    .upload-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.42rem 0.9rem;
+      border: 1.5px dashed #c5cad6;
+      border-radius: 7px;
       font-size: 0.8rem;
-      color: #888;
+      font-weight: 500;
+      cursor: pointer;
+      background: #f8f9fc;
+      color: #555;
+      transition: border-color 0.15s, background 0.15s, color 0.15s;
       white-space: nowrap;
+      user-select: none;
     }
 
+    .upload-label:hover { border-color: #3a86ff; background: #eef3ff; color: #3a86ff; }
+
+    .upload-label.has-file {
+      border-style: solid;
+      border-color: #2e7d32;
+      background: #e8f5e9;
+      color: #1b5e20;
+    }
+
+    input[type="file"] { display: none; }
+
+    .clear-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: #aaa;
+      font-size: 0.8rem;
+      padding: 0.25rem 0.45rem;
+      border-radius: 5px;
+      line-height: 1;
+      transition: background 0.15s, color 0.15s;
+    }
+
+    .clear-btn:hover { background: #fde8e8; color: #c62828; }
+
+    .accuracy-badge {
+      font-size: 0.77rem;
+      font-weight: 700;
+      border-radius: 99px;
+      padding: 3px 11px;
+      display: none;
+    }
+
+    .accuracy-badge.high { background: #c8e6c9; color: #1b5e20; }
+    .accuracy-badge.mid  { background: #fff9c4; color: #f57f17; }
+    .accuracy-badge.low  { background: #ffcdd2; color: #b71c1c; }
+
+    /* ── Content split ───────────────────────────── */
+    .content-split {
+      display: flex;
+      gap: 1.25rem;
+      align-items: flex-start;
+      flex: 1;
+      min-height: 0;
+    }
+
+    .panel-left  { flex: 1; min-width: 0; }
+
+    .panel-right {
+      width: 420px;
+      flex-shrink: 0;
+      position: sticky;
+      top: 1rem;
+    }
+
+    /* ── Results table ───────────────────────────── */
     #results {
       background: #fff;
       border-radius: 10px;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.07);
       overflow: hidden;
     }
 
     .results-header {
-      padding: 1rem 1.5rem;
+      padding: 0.875rem 1.25rem;
       border-bottom: 1px solid #eef0f5;
-      font-size: 0.8rem;
-      color: #666;
       display: flex;
       justify-content: space-between;
       align-items: center;
-    }
-
-    .results-header strong {
-      color: #1a1a2e;
-      font-size: 0.9rem;
-    }
-
-    .summary-pills {
-      display: flex;
+      flex-wrap: wrap;
       gap: 0.5rem;
     }
 
-    .pill {
-      font-size: 0.72rem;
+    .results-title {
+      font-size: 0.88rem;
       font-weight: 600;
-      border-radius: 99px;
-      padding: 2px 9px;
+      color: #1a1a2e;
+      word-break: break-all;
     }
-    .pill.e { background: #d4edda; color: #155724; }
-    .pill.c { background: #f8d7da; color: #721c24; }
-    .pill.n { background: #e9ecef; color: #495057; }
 
-    table {
-      width: 100%;
-      border-collapse: collapse;
-    }
+    .summary-pills { display: flex; gap: 0.35rem; flex-wrap: wrap; }
+
+    .pill { font-size: 0.7rem; font-weight: 600; border-radius: 99px; padding: 2px 9px; }
+    .pill.e { background: #c8e6c9; color: #1b5e20; }
+    .pill.c { background: #ffcdd2; color: #b71c1c; }
+    .pill.n { background: #e8eaf6; color: #3949ab; }
+
+    table { width: 100%; border-collapse: collapse; }
 
     thead th {
       background: #f8f9fc;
-      padding: 0.75rem 1.25rem;
+      padding: 0.6rem 1rem;
       text-align: left;
-      font-size: 0.75rem;
+      font-size: 0.7rem;
       text-transform: uppercase;
-      letter-spacing: 0.06em;
-      color: #888;
-      font-weight: 600;
+      letter-spacing: 0.07em;
+      color: #999;
+      font-weight: 700;
       border-bottom: 1px solid #eef0f5;
+      white-space: nowrap;
     }
 
-    tbody tr {
-      border-bottom: 1px solid #f2f3f7;
-      transition: background 0.1s;
-    }
-
+    tbody tr { border-bottom: 1px solid #f2f3f7; transition: background 0.1s; }
     tbody tr:last-child { border-bottom: none; }
-    tbody tr:hover { background: #f8f9fc; }
+    tbody tr:hover { background: #fafbfd; }
+    tbody tr.mismatch-row { background: #fff8f8; }
+    tbody tr.mismatch-row:hover { background: #fff0f0; }
 
     td {
-      padding: 0.875rem 1.25rem;
-      font-size: 0.875rem;
-      vertical-align: top;
+      padding: 0.7rem 1rem;
+      font-size: 0.85rem;
+      vertical-align: middle;
     }
 
-    td.desc {
-      font-weight: 600;
-      color: #1a1a2e;
-      white-space: nowrap;
-      width: 1%;
-    }
-
-    td.hypo {
-      color: #444;
-      line-height: 1.5;
-    }
-
-    td.choice { width: 1%; white-space: nowrap; }
+    td.desc { font-weight: 600; white-space: nowrap; width: 1%; }
+    td.hypo { color: #444; line-height: 1.55; }
+    td.col-choice, td.col-uploaded, td.col-match { width: 1%; white-space: nowrap; }
 
     .choice-badge {
       display: inline-block;
-      font-size: 0.75rem;
+      font-size: 0.72rem;
       font-weight: 700;
       border-radius: 5px;
-      padding: 3px 10px;
+      padding: 2px 9px;
       letter-spacing: 0.02em;
     }
 
-    .choice-badge.entailment    { background: #d4edda; color: #155724; }
-    .choice-badge.contradiction { background: #f8d7da; color: #721c24; }
-    .choice-badge.notmentioned  { background: #e9ecef; color: #495057; }
+    .choice-badge.entailment    { background: #c8e6c9; color: #1b5e20; }
+    .choice-badge.contradiction { background: #ffcdd2; color: #b71c1c; }
+    .choice-badge.notmentioned  { background: #e8eaf6; color: #3949ab; }
+
+    .match-icon { font-size: 1rem; font-weight: 900; }
+    .match-icon.ok   { color: #2e7d32; }
+    .match-icon.bad  { color: #c62828; }
+    .match-icon.none { color: #ccc; font-weight: 400; }
 
     .empty-state {
       text-align: center;
-      padding: 3rem 1rem;
+      padding: 3.5rem 1rem;
+      color: #c0c5d0;
+      font-size: 0.875rem;
+      line-height: 1.6;
+    }
+
+    .empty-state svg { display: block; margin: 0 auto 0.75rem; opacity: 0.3; }
+
+    /* ── Document viewer ─────────────────────────── */
+    .doc-panel {
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      height: calc(100vh - 10.5rem);
+      min-height: 280px;
+    }
+
+    .doc-panel-header {
+      padding: 0.7rem 1rem;
+      border-bottom: 1px solid #eef0f5;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+
+    .doc-panel-title {
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
       color: #aaa;
-      font-size: 0.9rem;
     }
 
-    .empty-state svg {
+    .doc-ext-tag {
+      font-size: 0.67rem;
+      background: #e8eaf6;
+      color: #3949ab;
+      border-radius: 4px;
+      padding: 1px 6px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+    }
+
+    .doc-panel-body {
+      flex: 1;
+      overflow: auto;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .doc-panel-body iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
       display: block;
-      margin: 0 auto 1rem;
-      opacity: 0.3;
+      flex: 1;
     }
 
-    #app { display: none; }
+    .doc-text {
+      padding: 1rem 1.25rem;
+      font-size: 0.78rem;
+      line-height: 1.75;
+      color: #333;
+      white-space: pre-wrap;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      flex: 1;
+    }
+
+    .doc-placeholder {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 2rem 1.5rem;
+      color: #c0c5d0;
+      gap: 0.75rem;
+      font-size: 0.83rem;
+      line-height: 1.6;
+    }
+
+    .doc-placeholder svg { opacity: 0.3; }
+
+    .doc-placeholder code {
+      background: #f5f6fa;
+      border: 1px solid #e2e5ec;
+      border-radius: 4px;
+      padding: 1px 6px;
+      font-size: 0.76rem;
+      color: #777;
+    }
+
+    /* ── Footer ──────────────────────────────────── */
+    footer {
+      background: #fff;
+      border-top: 1px solid #eef0f5;
+      padding: 0.875rem 2rem;
+      font-size: 0.74rem;
+      color: #999;
+      line-height: 1.65;
+      flex-shrink: 0;
+    }
+
+    footer a { color: #3a86ff; text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
+    footer strong { color: #666; }
+
+    /* ── Responsive ──────────────────────────────── */
+    @media (max-width: 980px) {
+      .content-split { flex-direction: column; }
+      .panel-right { width: 100%; position: static; }
+      .doc-panel { height: 420px; }
+    }
+
+    @media (max-width: 600px) {
+      #app { padding: 0.875rem; }
+      header { padding: 0.875rem 1rem; }
+      .attribution-bar { padding: 0.4rem 1rem; }
+      footer { padding: 0.75rem 1rem; }
+    }
   </style>
 </head>
 <body>
 
+<!-- ── Header ──────────────────────────────────── -->
 <header>
   <h1>NDA Hypothesis Review</h1>
   <span class="badge">ContractNLI</span>
 </header>
 
-<main>
-  <div id="loading"><span class="spinner"></span>Loading data…</div>
+<!-- ── Attribution / disclaimer ────────────────── -->
+<div class="attribution-bar">
+  Dataset and annotations by
+  <a href="https://stanfordnlp.github.io/contract-nli/" target="_blank" rel="noopener">
+    Stanford NLP — ContractNLI
+  </a>
+  (Koreeda &amp; Manning, EMNLP Findings 2021).
+  Provided for research and review purposes only — not legal advice.
+  Use subject to the <a href="TERMS" target="_blank">Terms of Use</a>
+  and <a href="LICENSE" target="_blank">CC BY 4.0 License</a>.
+  NDA documents are the property of their respective owners.
+</div>
 
-  <div id="app">
-    <div class="controls">
-      <label for="file-select">Document</label>
-      <div class="select-wrapper">
-        <select id="file-select">
-          <option value="">— select a document —</option>
-        </select>
-      </div>
-      <span class="doc-count" id="doc-count"></span>
-    </div>
+<!-- ── Loading state ────────────────────────────── -->
+<div id="loading"><span class="spinner"></span> Loading data…</div>
 
-    <div id="results">
-      <div class="empty-state">
-        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-          <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
-          <polyline points="14 2 14 8 20 8"/>
-          <line x1="16" y1="13" x2="8" y2="13"/>
-          <line x1="16" y1="17" x2="8" y2="17"/>
-          <polyline points="10 9 9 9 8 9"/>
-        </svg>
-        Select a document to view its hypotheses.
-      </div>
+<!-- ── App (hidden until data loads) ─────────────── -->
+<div id="app">
+
+  <!-- Controls bar -->
+  <div class="controls">
+    <span class="ctrl-label">Document</span>
+    <div class="select-wrap">
+      <select id="file-select">
+        <option value="">— select a document —</option>
+      </select>
     </div>
+    <span class="doc-count" id="doc-count"></span>
+
+    <div class="vr"></div>
+
+    <label class="upload-label" id="upload-label" for="results-upload">
+      <svg id="upload-icon" width="14" height="14" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+        <polyline points="17 8 12 3 7 8"/>
+        <line x1="12" y1="3" x2="12" y2="15"/>
+      </svg>
+      <span id="upload-label-text">Upload Results</span>
+      <input type="file" id="results-upload" accept=".json" />
+    </label>
+    <button class="clear-btn" id="clear-upload" title="Clear upload" style="display:none">✕</button>
+    <span class="accuracy-badge" id="accuracy-badge"></span>
   </div>
-</main>
+
+  <!-- Two-column content -->
+  <div class="content-split">
+
+    <!-- Left: hypothesis table -->
+    <div class="panel-left">
+      <div id="results">
+        <div class="empty-state">
+          <svg width="42" height="42" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="1.4">
+            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="16" y1="13" x2="8" y2="13"/>
+            <line x1="16" y1="17" x2="8" y2="17"/>
+            <polyline points="10 9 9 9 8 9"/>
+          </svg>
+          Select a document above to view its hypotheses.
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: document viewer -->
+    <div class="panel-right">
+      <div class="doc-panel">
+        <div class="doc-panel-header" id="doc-panel-header">
+          <span class="doc-panel-title">Document Preview</span>
+        </div>
+        <div class="doc-panel-body" id="doc-panel-body">
+          <div class="doc-placeholder">
+            <svg width="38" height="38" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="1.4">
+              <rect x="2" y="3" width="20" height="14" rx="2"/>
+              <line x1="8" y1="21" x2="16" y2="21"/>
+              <line x1="12" y1="17" x2="12" y2="21"/>
+            </svg>
+            <p>Select a document to preview it here.</p>
+            <p>Place original files in <code>raw/</code> to enable previews.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ── Footer ───────────────────────────────────── -->
+<footer>
+  <strong>Dataset:</strong>
+  ContractNLI — A Dataset for Document-level Natural Language Inference for Contracts
+  · Koreeda &amp; Manning, EMNLP Findings 2021
+  · <a href="https://stanfordnlp.github.io/contract-nli/" target="_blank" rel="noopener">
+      stanfordnlp.github.io/contract-nli
+    </a>
+  &nbsp;·&nbsp;
+  <strong>License:</strong> <a href="LICENSE" target="_blank">CC BY 4.0</a>
+  &nbsp;·&nbsp;
+  <strong>Terms:</strong> <a href="TERMS" target="_blank">Usage terms</a>
+  &nbsp;·&nbsp;
+  Annotations © Stanford NLP Group. Original NDA documents © their respective owners.
+  This tool does not constitute legal advice.
+</footer>
 
 <script>
+  "use strict";
+
   let appData = null;
+  let uploadedData = null; // map: nda-id → normalized choice string
+
+  // ── Bootstrap ──────────────────────────────────────────────────────────────
 
   async function init() {
-    const resp = await fetch('app_data.json');
+    const resp = await fetch("app_data.json");
     appData = await resp.json();
 
-    const select = document.getElementById('file-select');
+    const select = document.getElementById("file-select");
     const fileNames = Object.keys(appData.documents).sort((a, b) =>
-      a.localeCompare(b, undefined, { sensitivity: 'base' })
+      a.localeCompare(b, undefined, { sensitivity: "base" })
     );
 
     for (const name of fileNames) {
-      const opt = document.createElement('option');
+      const opt = document.createElement("option");
       opt.value = name;
       opt.textContent = name;
       select.appendChild(opt);
     }
 
-    document.getElementById('doc-count').textContent = `${fileNames.length} documents`;
-    document.getElementById('loading').style.display = 'none';
-    document.getElementById('app').style.display = 'block';
+    document.getElementById("doc-count").textContent =
+      `${fileNames.length} documents`;
+    document.getElementById("loading").style.display = "none";
+    document.getElementById("app").style.display = "flex";
 
-    select.addEventListener('change', () => {
-      if (select.value) renderTable(select.value);
-      else resetTable();
+    select.addEventListener("change", () => {
+      const v = select.value;
+      if (v) { renderTable(v); renderDocViewer(v); }
+      else   { resetTable(); resetDocViewer(); }
     });
+
+    document.getElementById("results-upload")
+      .addEventListener("change", handleUpload);
+    document.getElementById("clear-upload")
+      .addEventListener("click", clearUpload);
   }
 
-  function sortedHypothesisIds(labels) {
-    return Object.keys(labels).sort((a, b) => {
-      const n = x => parseInt(x.replace('nda-', ''), 10);
-      return n(a) - n(b);
-    });
+  // ── Hypothesis table ───────────────────────────────────────────────────────
+
+  function sortedIds(labels) {
+    return Object.keys(labels).sort((a, b) =>
+      parseInt(a.replace("nda-", ""), 10) - parseInt(b.replace("nda-", ""), 10)
+    );
   }
 
   function renderTable(fileName) {
     const annotations = appData.documents[fileName];
-    const labels = appData.labels;
-    const ids = sortedHypothesisIds(labels);
+    const labels      = appData.labels;
+    const ids         = sortedIds(labels);
+    const hasUpload   = uploadedData !== null;
 
     let entCount = 0, conCount = 0, notCount = 0;
+    let matchCount = 0, totalCompared = 0;
+
     const rows = ids.map(id => {
-      const label = labels[id];
-      const choice = annotations[id] || 'NotMentioned';
-      if (choice === 'Entailment') entCount++;
-      else if (choice === 'Contradiction') conCount++;
+      const label  = labels[id];
+      const truth  = annotations[id] || "NotMentioned";
+
+      if (truth === "Entailment")    entCount++;
+      else if (truth === "Contradiction") conCount++;
       else notCount++;
 
-      const cls = choice.toLowerCase().replace('notmentioned', 'notmentioned');
-      return `<tr>
-        <td class="desc">${escHtml(label.short_description)}</td>
-        <td class="hypo">${escHtml(label.hypothesis)}</td>
-        <td class="choice"><span class="choice-badge ${cls}">${escHtml(choice)}</span></td>
-      </tr>`;
-    }).join('');
+      const truthCls = truth.toLowerCase();
+      let uploadedCell = "";
+      let matchCell    = "";
+      let rowClass     = "";
 
-    document.getElementById('results').innerHTML = `
+      if (hasUpload) {
+        const up = uploadedData[id];
+        if (up) {
+          totalCompared++;
+          const isMatch = up === truth;
+          if (isMatch) matchCount++;
+          else rowClass = "mismatch-row";
+
+          uploadedCell = `<td class="col-uploaded">
+            <span class="choice-badge ${up.toLowerCase()}">${esc(up)}</span>
+          </td>`;
+          matchCell = `<td class="col-match">
+            <span class="match-icon ${isMatch ? "ok" : "bad"}">${isMatch ? "✓" : "✗"}</span>
+          </td>`;
+        } else {
+          uploadedCell = `<td class="col-uploaded">
+            <span class="match-icon none">—</span>
+          </td>`;
+          matchCell = `<td class="col-match">
+            <span class="match-icon none">—</span>
+          </td>`;
+        }
+      }
+
+      return `<tr class="${rowClass}">
+        <td class="desc">${esc(label.short_description)}</td>
+        <td class="hypo">${esc(label.hypothesis)}</td>
+        <td class="col-choice">
+          <span class="choice-badge ${truthCls}">${esc(truth)}</span>
+        </td>
+        ${uploadedCell}${matchCell}
+      </tr>`;
+    }).join("");
+
+    const uploadHeaders = hasUpload
+      ? "<th>Uploaded</th><th>Match</th>"
+      : "";
+
+    // Accuracy badge
+    if (hasUpload && totalCompared > 0) {
+      const pct   = Math.round(100 * matchCount / totalCompared);
+      const badge = document.getElementById("accuracy-badge");
+      badge.textContent = `${matchCount}/${totalCompared} correct (${pct}%)`;
+      badge.className   = `accuracy-badge ${pct >= 80 ? "high" : pct >= 60 ? "mid" : "low"}`;
+      badge.style.display = "inline-block";
+    }
+
+    document.getElementById("results").innerHTML = `
       <div class="results-header">
-        <strong>${escHtml(fileName)}</strong>
+        <span class="results-title">${esc(fileName)}</span>
         <div class="summary-pills">
           <span class="pill e">${entCount} Entailment</span>
           <span class="pill c">${conCount} Contradiction</span>
@@ -341,7 +669,8 @@
           <tr>
             <th>Short Description</th>
             <th>Hypothesis</th>
-            <th>Choice</th>
+            <th>Ground Truth</th>
+            ${uploadHeaders}
           </tr>
         </thead>
         <tbody>${rows}</tbody>
@@ -349,25 +678,225 @@
   }
 
   function resetTable() {
-    document.getElementById('results').innerHTML = `
+    document.getElementById("results").innerHTML = `
       <div class="empty-state">
-        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <svg width="42" height="42" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="1.4">
           <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
           <polyline points="14 2 14 8 20 8"/>
           <line x1="16" y1="13" x2="8" y2="13"/>
           <line x1="16" y1="17" x2="8" y2="17"/>
           <polyline points="10 9 9 9 8 9"/>
         </svg>
-        Select a document to view its hypotheses.
+        Select a document above to view its hypotheses.
       </div>`;
   }
 
-  function escHtml(str) {
-    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  // ── Document viewer ────────────────────────────────────────────────────────
+
+  async function renderDocViewer(fileName) {
+    const header = document.getElementById("doc-panel-header");
+    const body   = document.getElementById("doc-panel-body");
+    const ext    = (fileName.split(".").pop() || "").toLowerCase();
+    const url    = "raw/" + encodeURIComponent(fileName);
+
+    header.innerHTML = `
+      <span class="doc-panel-title">Document Preview</span>
+      <span class="doc-ext-tag">${esc(ext.toUpperCase())}</span>`;
+
+    body.innerHTML = `<div class="doc-placeholder"><span class="spinner"></span></div>`;
+
+    // Probe for the file's existence
+    let exists = false;
+    try {
+      const probe = await fetch(url, { method: "HEAD" });
+      exists = probe.ok;
+    } catch (_) { /* network error or CORS — treat as not found */ }
+
+    if (!exists) {
+      body.innerHTML = `
+        <div class="doc-placeholder">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="1.4">
+            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+          </svg>
+          <p>Document not available in this repository.</p>
+          <p>To enable previews, place the original file at<br>
+             <code>raw/${esc(fileName)}</code></p>
+        </div>`;
+      return;
+    }
+
+    if (ext === "pdf") {
+      body.innerHTML =
+        `<iframe src="${esc(url)}" title="${esc(fileName)}"></iframe>`;
+    } else {
+      // Render as plain text (handles .txt, .html, SEC filings, etc.)
+      try {
+        const r    = await fetch(url);
+        const text = await r.text();
+        body.innerHTML =
+          `<div class="doc-text">${esc(text)}</div>`;
+      } catch (e) {
+        body.innerHTML =
+          `<div class="doc-placeholder"><p>Failed to load: ${esc(e.message)}</p></div>`;
+      }
+    }
   }
 
+  function resetDocViewer() {
+    document.getElementById("doc-panel-header").innerHTML =
+      `<span class="doc-panel-title">Document Preview</span>`;
+    document.getElementById("doc-panel-body").innerHTML = `
+      <div class="doc-placeholder">
+        <svg width="38" height="38" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="1.4">
+          <rect x="2" y="3" width="20" height="14" rx="2"/>
+          <line x1="8" y1="21" x2="16" y2="21"/>
+          <line x1="12" y1="17" x2="12" y2="21"/>
+        </svg>
+        <p>Select a document to preview it here.</p>
+        <p>Place original files in <code>raw/</code> to enable previews.</p>
+      </div>`;
+  }
+
+  // ── Upload / comparison ────────────────────────────────────────────────────
+
+  /**
+   * Normalize an uploaded choice value to the ContractNLI canonical form.
+   * Handles "Entailed"/"Entailment", "Contradicted"/"Contradiction",
+   * "Not mentioned"/"NotMentioned", and case variants.
+   */
+  function normalizeChoice(raw) {
+    if (!raw) return null;
+    switch (String(raw).trim().toLowerCase()) {
+      case "entailed":
+      case "entailment":
+        return "Entailment";
+      case "contradicted":
+      case "contradiction":
+        return "Contradiction";
+      case "not mentioned":
+      case "notmentioned":
+      case "not_mentioned":
+        return "NotMentioned";
+      default:
+        return null;
+    }
+  }
+
+  /** Reduce a string to lowercase alphanumeric words for fuzzy matching. */
+  function normStr(s) {
+    return s.toLowerCase().replace(/[^a-z0-9\s]/g, "").replace(/\s+/g, " ").trim();
+  }
+
+  /**
+   * Map an uploaded short_description key to its nda-id.
+   * Tries exact normalized match first, then word-overlap Jaccard ≥ 0.5.
+   */
+  function findNdaId(descriptionKey) {
+    const normKey  = normStr(descriptionKey);
+    const labels   = appData.labels;
+
+    for (const [id, label] of Object.entries(labels)) {
+      if (normStr(label.short_description) === normKey) return id;
+    }
+
+    // Fuzzy fallback
+    const keyWords = new Set(normKey.split(" "));
+    let bestId = null, bestScore = 0;
+
+    for (const [id, label] of Object.entries(labels)) {
+      const lWords      = new Set(normStr(label.short_description).split(" "));
+      const intersection = [...keyWords].filter(w => lWords.has(w)).length;
+      const union        = new Set([...keyWords, ...lWords]).size;
+      const score        = intersection / union;
+      if (score > bestScore) { bestScore = score; bestId = id; }
+    }
+
+    return bestScore >= 0.5 ? bestId : null;
+  }
+
+  async function handleUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    let json;
+    try {
+      json = JSON.parse(await file.text());
+    } catch (e) {
+      alert("Could not parse JSON: " + e.message);
+      event.target.value = "";
+      return;
+    }
+
+    if (typeof json !== "object" || Array.isArray(json)) {
+      alert("Expected a JSON object with hypothesis short descriptions as keys.");
+      event.target.value = "";
+      return;
+    }
+
+    uploadedData = {};
+    let unmatched = 0;
+
+    for (const [key, val] of Object.entries(json)) {
+      const ndaId  = findNdaId(key);
+      const choice = normalizeChoice(val);
+      if (ndaId && choice) {
+        uploadedData[ndaId] = choice;
+      } else {
+        unmatched++;
+        console.warn(`Upload: could not map "${key}" → "${val}"`);
+      }
+    }
+
+    // Update upload button appearance
+    document.getElementById("upload-label").classList.add("has-file");
+    document.getElementById("upload-label-text").textContent = file.name;
+    document.getElementById("clear-upload").style.display = "inline-block";
+
+    const currentFile = document.getElementById("file-select").value;
+    if (currentFile) renderTable(currentFile);
+
+    if (unmatched > 0) {
+      console.warn(
+        `${unmatched} key(s) from the uploaded file could not be matched to known hypotheses.`
+      );
+    }
+  }
+
+  function clearUpload() {
+    uploadedData = null;
+
+    document.getElementById("upload-label").classList.remove("has-file");
+    document.getElementById("upload-label-text").textContent = "Upload Results";
+    document.getElementById("results-upload").value = "";
+    document.getElementById("clear-upload").style.display = "none";
+
+    const badge = document.getElementById("accuracy-badge");
+    badge.style.display  = "none";
+    badge.textContent    = "";
+
+    const currentFile = document.getElementById("file-select").value;
+    if (currentFile) renderTable(currentFile);
+  }
+
+  // ── Utility ────────────────────────────────────────────────────────────────
+
+  function esc(s) {
+    return String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  // ── Start ──────────────────────────────────────────────────────────────────
+
   init().catch(err => {
-    document.getElementById('loading').innerHTML = `<span style="color:#c00">Failed to load data: ${err.message}</span>`;
+    document.getElementById("loading").innerHTML =
+      `<span style="color:#c62828">Failed to load data: ${esc(err.message)}</span>`;
   });
 </script>
 

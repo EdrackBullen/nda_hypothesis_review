@@ -459,6 +459,23 @@
 
     .span-back-btn:hover { border-color: #3a86ff; color: #3a86ff; }
 
+    .doc-full-text {
+      font-size: 0.78rem;
+      line-height: 1.75;
+      color: #333;
+      white-space: pre-wrap;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    }
+
+    mark.span-highlight {
+      background: #fff0a0;
+      color: inherit;
+      border-radius: 2px;
+      padding: 1px 0;
+      outline: 2px solid #f0b429;
+      outline-offset: 1px;
+    }
+
     .empty-state {
       text-align: center;
       padding: 3.5rem 1rem;
@@ -854,7 +871,7 @@
     const labels      = appData.labels;
     const ids         = sortedIds(labels);
     const hasUpload   = uploadedData !== null;
-    const docSpans    = (spansData && spansData[fileName]) || {};
+    const docSpans    = (spansData && spansData[fileName] && spansData[fileName].spans) || {};
 
     let entCount = 0, conCount = 0, notCount = 0;
     let matchCount = 0, totalCompared = 0;
@@ -933,7 +950,8 @@
       if (!btn) return;
       const id   = btn.dataset.ndaId;
       const file = btn.dataset.file;
-      const spans = (spansData[file] || {})[id];
+      const entry = spansData[file];
+      const spans = entry && entry.spans && entry.spans[id];
       if (spans) renderSpanViewer(spans, appData.labels[id].short_description, file);
     };
 
@@ -1043,17 +1061,29 @@
       </div>`;
   }
 
-  function renderSpanViewer(spans, label, fileName) {
-    const body = document.getElementById("doc-panel-body");
+  function renderSpanViewer(spanOffsets, label, fileName) {
+    const body   = document.getElementById("doc-panel-body");
     const header = document.getElementById("doc-panel-header");
 
     header.innerHTML = `
       <span class="doc-panel-title">Source Clauses</span>
       <span class="doc-ext-tag">${esc(label)}</span>`;
 
-    const excerpts = spans.map(s =>
-      `<div class="span-excerpt">${esc(s.trim())}</div>`
-    ).join("");
+    const docEntry = spansData[fileName];
+    if (!docEntry) return;
+    const fullText = docEntry.text;
+
+    // Build highlighted HTML from char offsets
+    // Sort spans by start offset, merge overlaps just in case
+    const sorted = [...spanOffsets].sort((a, b) => a[0] - b[0]);
+    let html = "";
+    let cursor = 0;
+    for (const [start, end] of sorted) {
+      if (start > cursor) html += esc(fullText.slice(cursor, start));
+      html += `<mark class="span-highlight">${esc(fullText.slice(start, end))}</mark>`;
+      cursor = end;
+    }
+    if (cursor < fullText.length) html += esc(fullText.slice(cursor));
 
     body.innerHTML = `
       <div class="span-viewer-wrap">
@@ -1064,9 +1094,13 @@
           </svg>
           Back to document
         </button>
-        <div class="span-viewer-label">${spans.length} supporting clause${spans.length !== 1 ? "s" : ""}</div>
-        ${excerpts}
+        <div class="span-viewer-label">${sorted.length} supporting clause${sorted.length !== 1 ? "s" : ""}</div>
+        <div class="doc-full-text">${html}</div>
       </div>`;
+
+    // Scroll first highlight into view
+    const first = body.querySelector(".span-highlight");
+    if (first) first.scrollIntoView({ behavior: "smooth", block: "center" });
 
     document.getElementById("span-back").addEventListener("click", () => {
       renderDocViewer(fileName);

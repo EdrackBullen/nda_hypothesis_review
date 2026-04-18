@@ -54,7 +54,8 @@ for fname in raw_files:
     # (output["documents"] only has choices; re-derive from doc_raw is not possible
     #  without the original span index list, so we re-read from splits below)
 
-# Re-read splits to get span indices for manifest docs
+# Re-read splits to get span indices + full text for manifest docs
+# Format: { filename: { "text": "...", "spans": { nda_id: [[start,end], ...] } } }
 manifest_set = set(raw_files)
 for split in ["train.json", "dev.json", "test.json"]:
     with open(os.path.join(BASE, split)) as f:
@@ -62,14 +63,16 @@ for split in ["train.json", "dev.json", "test.json"]:
     for doc in data["documents"]:
         if doc["file_name"] not in manifest_set:
             continue
-        text = doc["text"]
         doc_spans = doc["spans"]
-        entry = {}
+        ann_spans = {}
         for nda_id, ann in doc["annotation_sets"][0]["annotations"].items():
-            resolved = [text[doc_spans[si][0]:doc_spans[si][1]] for si in ann["spans"]]
-            if resolved:
-                entry[nda_id] = resolved
-        spans_data[doc["file_name"]] = entry
+            offsets = [list(doc_spans[si]) for si in ann["spans"]]
+            if offsets:
+                ann_spans[nda_id] = offsets
+        spans_data[doc["file_name"]] = {
+            "text": doc["text"],
+            "spans": ann_spans,
+        }
 
 with open(os.path.join(BASE, "spans_data.json"), "w") as f:
     json.dump(spans_data, f, separators=(",", ":"))

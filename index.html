@@ -696,19 +696,33 @@
       }
     }
 
-    const total = Object.keys(appData.documents).length;
-    document.getElementById("doc-count").textContent =
-      rawSet !== null
-        ? `${fileNames.length} of ${total} documents`
-        : `${fileNames.length} documents`;
+    const total = fileNames.length;
+    const viewedDocs = new Set();
+
+    function updateDocCount() {
+      document.getElementById("doc-count").textContent =
+        rawSet !== null
+          ? `${viewedDocs.size} of ${total} documents`
+          : `${total} documents`;
+    }
+    updateDocCount();
 
     document.getElementById("loading").style.display = "none";
     document.getElementById("app").style.display = "flex";
 
     select.addEventListener("change", () => {
       const v = select.value;
-      if (v) { renderTable(v); renderDocViewer(v); }
-      else   { resetTable(); resetDocViewer(); }
+      if (v) {
+        renderTable(v);
+        renderDocViewer(v);
+        if (!viewedDocs.has(v)) {
+          viewedDocs.add(v);
+          updateDocCount();
+        }
+      } else {
+        resetTable();
+        resetDocViewer();
+      }
     });
 
     document.getElementById("results-upload")

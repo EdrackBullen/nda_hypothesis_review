@@ -195,6 +195,96 @@
     .accuracy-badge.mid  { background: #fff9c4; color: #f57f17; }
     .accuracy-badge.low  { background: #ffcdd2; color: #b71c1c; }
 
+    /* ── Paste toggle button ─────────────────────── */
+    .paste-toggle-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.42rem 0.9rem;
+      border: 1.5px solid #dde1ea;
+      border-radius: 7px;
+      font-size: 0.8rem;
+      font-weight: 500;
+      cursor: pointer;
+      background: #f8f9fc;
+      color: #555;
+      transition: border-color 0.15s, background 0.15s, color 0.15s;
+      white-space: nowrap;
+    }
+
+    .paste-toggle-btn:hover,
+    .paste-toggle-btn.active { border-color: #3a86ff; background: #eef3ff; color: #3a86ff; }
+
+    /* ── Paste panel ─────────────────────────────── */
+    #paste-panel {
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+      padding: 1rem 1.25rem;
+      display: none;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    #paste-panel.open { display: flex; }
+
+    .paste-panel-label {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: #444;
+    }
+
+    #paste-input {
+      width: 100%;
+      height: 148px;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      font-size: 0.78rem;
+      border: 1.5px solid #dde1ea;
+      border-radius: 7px;
+      padding: 0.7rem 0.875rem;
+      resize: vertical;
+      outline: none;
+      background: #f8f9fc;
+      color: #1a1a2e;
+      line-height: 1.55;
+      transition: border-color 0.15s, background 0.15s;
+    }
+
+    #paste-input:focus { border-color: #3a86ff; background: #fff; }
+    #paste-input.error { border-color: #c62828; background: #fff8f8; }
+
+    .paste-actions { display: flex; align-items: center; gap: 0.6rem; }
+
+    .btn-apply {
+      padding: 0.42rem 1.1rem;
+      background: #1a1a2e;
+      color: #fff;
+      border: none;
+      border-radius: 7px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    .btn-apply:hover { background: #2d2d50; }
+
+    .btn-cancel {
+      padding: 0.42rem 0.9rem;
+      background: none;
+      border: 1.5px solid #dde1ea;
+      border-radius: 7px;
+      font-size: 0.82rem;
+      font-weight: 500;
+      color: #666;
+      cursor: pointer;
+      transition: border-color 0.15s, color 0.15s;
+    }
+
+    .btn-cancel:hover { border-color: #bbb; color: #333; }
+
+    .paste-error-msg { font-size: 0.78rem; color: #c62828; display: none; }
+
     /* ── Content split ───────────────────────────── */
     .content-split {
       display: flex;
@@ -474,6 +564,27 @@
     </label>
     <button class="clear-btn" id="clear-upload" title="Clear upload" style="display:none">✕</button>
     <span class="accuracy-badge" id="accuracy-badge"></span>
+
+    <button class="paste-toggle-btn" id="paste-toggle">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/>
+        <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
+      </svg>
+      Paste JSON
+    </button>
+  </div>
+
+  <!-- Paste panel (collapsible) -->
+  <div id="paste-panel">
+    <span class="paste-panel-label">Paste results JSON</span>
+    <textarea id="paste-input" spellcheck="false"
+      placeholder='{"Explicit identification": "Entailed", "No reverse engineering": "Not mentioned", ...}'></textarea>
+    <div class="paste-actions">
+      <button class="btn-apply" id="paste-apply">Apply</button>
+      <button class="btn-cancel" id="paste-cancel">Cancel</button>
+      <span class="paste-error-msg" id="paste-error"></span>
+    </div>
   </div>
 
   <!-- Two-column content -->
@@ -546,23 +657,51 @@
   // ── Bootstrap ──────────────────────────────────────────────────────────────
 
   async function init() {
-    const resp = await fetch("app_data.json");
-    appData = await resp.json();
+    // Load app data and the raw-files manifest in parallel.
+    // Manifest fetch is best-effort: 404 or network error → show no documents
+    // (re-run preprocess.py after adding files to raw/ to update the manifest).
+    const [dataResp, manifestResp] = await Promise.all([
+      fetch("app_data.json"),
+      fetch("raw_manifest.json").catch(() => null),
+    ]);
 
-    const select = document.getElementById("file-select");
-    const fileNames = Object.keys(appData.documents).sort((a, b) =>
-      a.localeCompare(b, undefined, { sensitivity: "base" })
-    );
+    appData = await dataResp.json();
 
-    for (const name of fileNames) {
-      const opt = document.createElement("option");
-      opt.value = name;
-      opt.textContent = name;
-      select.appendChild(opt);
+    let rawSet = null;
+    if (manifestResp && manifestResp.ok) {
+      rawSet = new Set(await manifestResp.json());
     }
 
+    const select = document.getElementById("file-select");
+    let fileNames = Object.keys(appData.documents);
+
+    // If a manifest was loaded, restrict the dropdown to files present in raw/.
+    if (rawSet !== null) {
+      fileNames = fileNames.filter(name => rawSet.has(name));
+    }
+
+    fileNames.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+
+    if (fileNames.length === 0) {
+      const opt = document.createElement("option");
+      opt.disabled = true;
+      opt.textContent = "— no documents in raw/ folder yet —";
+      select.appendChild(opt);
+    } else {
+      for (const name of fileNames) {
+        const opt = document.createElement("option");
+        opt.value = name;
+        opt.textContent = name;
+        select.appendChild(opt);
+      }
+    }
+
+    const total = Object.keys(appData.documents).length;
     document.getElementById("doc-count").textContent =
-      `${fileNames.length} documents`;
+      rawSet !== null
+        ? `${fileNames.length} of ${total} documents`
+        : `${fileNames.length} documents`;
+
     document.getElementById("loading").style.display = "none";
     document.getElementById("app").style.display = "flex";
 
@@ -576,6 +715,14 @@
       .addEventListener("change", handleUpload);
     document.getElementById("clear-upload")
       .addEventListener("click", clearUpload);
+
+    // Paste panel
+    document.getElementById("paste-toggle")
+      .addEventListener("click", togglePastePanel);
+    document.getElementById("paste-apply")
+      .addEventListener("click", applyPaste);
+    document.getElementById("paste-cancel")
+      .addEventListener("click", closePastePanel);
   }
 
   // ── Hypothesis table ───────────────────────────────────────────────────────
@@ -818,6 +965,46 @@
     return bestScore >= 0.5 ? bestId : null;
   }
 
+  // ── Shared results application ─────────────────────────────────────────────
+
+  /**
+   * Parse a plain JSON object of {short_description: choice} pairs,
+   * normalize the keys and values, store in uploadedData, and re-render.
+   * Returns an error string on failure, or null on success.
+   */
+  function applyResults(json) {
+    if (typeof json !== "object" || Array.isArray(json)) {
+      return "Expected a JSON object with hypothesis short descriptions as keys.";
+    }
+
+    const result = {};
+    let unmatched = 0;
+
+    for (const [key, val] of Object.entries(json)) {
+      const ndaId  = findNdaId(key);
+      const choice = normalizeChoice(val);
+      if (ndaId && choice) {
+        result[ndaId] = choice;
+      } else {
+        unmatched++;
+        console.warn(`Results: could not map "${key}" → "${val}"`);
+      }
+    }
+
+    uploadedData = result;
+
+    const currentFile = document.getElementById("file-select").value;
+    if (currentFile) renderTable(currentFile);
+
+    if (unmatched > 0) {
+      console.warn(`${unmatched} key(s) could not be matched to known hypotheses.`);
+    }
+
+    return null; // success
+  }
+
+  // ── File upload ────────────────────────────────────────────────────────────
+
   async function handleUpload(event) {
     const file = event.target.files[0];
     if (!file) return;
@@ -831,39 +1018,18 @@
       return;
     }
 
-    if (typeof json !== "object" || Array.isArray(json)) {
-      alert("Expected a JSON object with hypothesis short descriptions as keys.");
+    const err = applyResults(json);
+    if (err) {
+      alert(err);
       event.target.value = "";
       return;
     }
 
-    uploadedData = {};
-    let unmatched = 0;
-
-    for (const [key, val] of Object.entries(json)) {
-      const ndaId  = findNdaId(key);
-      const choice = normalizeChoice(val);
-      if (ndaId && choice) {
-        uploadedData[ndaId] = choice;
-      } else {
-        unmatched++;
-        console.warn(`Upload: could not map "${key}" → "${val}"`);
-      }
-    }
-
-    // Update upload button appearance
+    // Close paste panel if open, update upload button
+    closePastePanel(/* keepData= */ true);
     document.getElementById("upload-label").classList.add("has-file");
     document.getElementById("upload-label-text").textContent = file.name;
     document.getElementById("clear-upload").style.display = "inline-block";
-
-    const currentFile = document.getElementById("file-select").value;
-    if (currentFile) renderTable(currentFile);
-
-    if (unmatched > 0) {
-      console.warn(
-        `${unmatched} key(s) from the uploaded file could not be matched to known hypotheses.`
-      );
-    }
   }
 
   function clearUpload() {
@@ -875,11 +1041,78 @@
     document.getElementById("clear-upload").style.display = "none";
 
     const badge = document.getElementById("accuracy-badge");
-    badge.style.display  = "none";
-    badge.textContent    = "";
+    badge.style.display = "none";
+    badge.textContent   = "";
 
     const currentFile = document.getElementById("file-select").value;
     if (currentFile) renderTable(currentFile);
+  }
+
+  // ── Paste panel ────────────────────────────────────────────────────────────
+
+  function togglePastePanel() {
+    const panel = document.getElementById("paste-panel");
+    const btn   = document.getElementById("paste-toggle");
+    const isOpen = panel.classList.toggle("open");
+    btn.classList.toggle("active", isOpen);
+    if (isOpen) document.getElementById("paste-input").focus();
+  }
+
+  function closePastePanel(keepData) {
+    document.getElementById("paste-panel").classList.remove("open");
+    document.getElementById("paste-toggle").classList.remove("active");
+    if (!keepData) {
+      document.getElementById("paste-input").value = "";
+      document.getElementById("paste-input").classList.remove("error");
+      document.getElementById("paste-error").style.display = "none";
+    }
+  }
+
+  function applyPaste() {
+    const raw      = document.getElementById("paste-input").value.trim();
+    const errorEl  = document.getElementById("paste-error");
+    const inputEl  = document.getElementById("paste-input");
+
+    errorEl.style.display = "none";
+    inputEl.classList.remove("error");
+
+    if (!raw) {
+      showPasteError("Paste your JSON results above.");
+      return;
+    }
+
+    let json;
+    try {
+      json = JSON.parse(raw);
+    } catch (e) {
+      showPasteError("Invalid JSON: " + e.message);
+      return;
+    }
+
+    const err = applyResults(json);
+    if (err) {
+      showPasteError(err);
+      return;
+    }
+
+    // Success — close panel, clear file-upload state, show clear button
+    clearUploadUIOnly();
+    closePastePanel(/* keepData= */ true);
+    document.getElementById("clear-upload").style.display = "inline-block";
+  }
+
+  function showPasteError(msg) {
+    const el = document.getElementById("paste-error");
+    el.textContent    = msg;
+    el.style.display  = "inline";
+    document.getElementById("paste-input").classList.add("error");
+  }
+
+  /** Reset upload button visuals without clearing uploadedData. */
+  function clearUploadUIOnly() {
+    document.getElementById("upload-label").classList.remove("has-file");
+    document.getElementById("upload-label-text").textContent = "Upload Results";
+    document.getElementById("results-upload").value = "";
   }
 
   // ── Utility ────────────────────────────────────────────────────────────────

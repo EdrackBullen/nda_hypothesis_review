@@ -293,19 +293,80 @@
     /* ── Content split ───────────────────────────── */
     .content-split {
       display: flex;
-      gap: 1.25rem;
+      gap: 0;
       align-items: flex-start;
       flex: 1;
       min-height: 0;
     }
 
-    .panel-left  { flex: 1; min-width: 0; }
+    .panel-left  { flex: 1; min-width: 0; margin-right: 0; }
+
+    .resize-handle {
+      width: 10px;
+      flex-shrink: 0;
+      cursor: col-resize;
+      align-self: stretch;
+      position: relative;
+      z-index: 10;
+      user-select: none;
+    }
+
+    .resize-handle::after {
+      content: '';
+      position: absolute;
+      left: 4px;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: #e2e5ec;
+      border-radius: 1px;
+      transition: background 0.15s;
+    }
+
+    .resize-handle:hover::after,
+    .resize-handle.dragging::after { background: #3a86ff; }
 
     .panel-right {
       width: 420px;
       flex-shrink: 0;
       position: sticky;
       top: 1rem;
+      margin-left: 6px;
+    }
+
+    /* ── Zoom controls ───────────────────────────── */
+    .zoom-controls {
+      display: flex;
+      align-items: center;
+      gap: 0.2rem;
+    }
+
+    .zoom-btn {
+      width: 20px;
+      height: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: none;
+      border: 1.5px solid rgba(255,255,255,0.25);
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: #ccc;
+      line-height: 1;
+      transition: border-color 0.15s, color 0.15s;
+      padding: 0;
+    }
+
+    .zoom-btn:hover { border-color: rgba(255,255,255,0.6); color: #fff; }
+
+    .zoom-level {
+      font-size: 0.68rem;
+      font-weight: 600;
+      color: #aaa;
+      min-width: 34px;
+      text-align: center;
     }
 
     /* ── Results table ───────────────────────────── */
@@ -497,7 +558,7 @@
     /* ── PDF.js viewer ───────────────────────────── */
     .pdf-viewer-wrap {
       flex: 1;
-      overflow-y: auto;
+      overflow: auto;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -678,7 +739,7 @@
   <div class="content-split">
 
     <!-- Left: hypothesis table -->
-    <div class="panel-left">
+    <div class="panel-left" id="panel-left">
       <div id="results">
         <div class="empty-state">
           <svg width="42" height="42" viewBox="0 0 24 24" fill="none"
@@ -694,8 +755,10 @@
       </div>
     </div>
 
+    <div class="resize-handle" id="resize-handle"></div>
+
     <!-- Right: document viewer -->
-    <div class="panel-right">
+    <div class="panel-right" id="panel-right">
       <div class="doc-panel">
         <div class="doc-panel-header" id="doc-panel-header">
           <span class="doc-panel-title">Document Preview</span>
@@ -746,6 +809,10 @@
   let appData = null;
   let spansData = {};
   let uploadedData = null; // map: nda-id → normalized choice string
+  let currentPdfDoc  = null;
+  let currentPdfFile = null;
+  let currentPdfZoom = 1.0;
+  let currentHighlightTexts = null;
 
   // ── Bootstrap ──────────────────────────────────────────────────────────────
 
@@ -825,6 +892,10 @@
 
     select.addEventListener("change", () => {
       const v = select.value;
+      // Reset zoom and PDF cache when switching document
+      currentPdfZoom = 1.0;
+      currentPdfDoc  = null;
+      currentPdfFile = null;
       // Clear any pasted/uploaded results when switching document
       if (uploadedData !== null) {
         uploadedData = null;
@@ -846,6 +917,38 @@
         resetDocViewer();
         updateDownloadBtn("");
       }
+    });
+
+    // Panel resize
+    const resizeHandle  = document.getElementById("resize-handle");
+    const panelRight    = document.getElementById("panel-right");
+    const contentSplit  = resizeHandle.closest(".content-split");
+    let   resizing      = false;
+
+    resizeHandle.addEventListener("mousedown", e => {
+      resizing = true;
+      resizeHandle.classList.add("dragging");
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
+      e.preventDefault();
+    });
+
+    document.addEventListener("mousemove", e => {
+      if (!resizing) return;
+      const rect  = contentSplit.getBoundingClientRect();
+      const newW  = Math.max(260, Math.min(760, rect.right - e.clientX - 8));
+      panelRight.style.width = newW + "px";
+    });
+
+    document.addEventListener("mouseup", () => {
+      if (!resizing) return;
+      resizing = false;
+      resizeHandle.classList.remove("dragging");
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      // Re-render PDF at new panel width
+      const body = document.getElementById("doc-panel-body");
+      if (currentPdfDoc && body) renderPdfPages(body);
     });
 
     // Paste panel
@@ -1004,71 +1107,102 @@
     const ext    = (fileName.split(".").pop() || "").toLowerCase();
     const url    = "raw/" + encodeURIComponent(fileName);
 
+    currentHighlightTexts = highlightTexts;
+
+    if (ext !== "pdf" || typeof pdfjsLib === "undefined") {
+      header.innerHTML = `
+        <span class="doc-panel-title">Document Preview</span>
+        <span class="doc-ext-tag">${esc(ext.toUpperCase())}</span>`;
+      body.innerHTML = `<div class="doc-placeholder"><span class="spinner"></span></div>`;
+      if (ext !== "pdf") {
+        try {
+          const r = await fetch(url);
+          body.innerHTML = `<div class="doc-text">${esc(await r.text())}</div>`;
+        } catch (e) {
+          body.innerHTML = `<div class="doc-placeholder"><p>Failed to load: ${esc(e.message)}</p></div>`;
+        }
+      } else {
+        body.innerHTML = `<iframe src="${esc(url)}" title="${esc(fileName)}"></iframe>`;
+      }
+      return;
+    }
+
+    // Zoom controls in header
     header.innerHTML = `
       <span class="doc-panel-title">Document Preview</span>
-      <span class="doc-ext-tag">${esc(ext.toUpperCase())}</span>`;
+      <div style="display:flex;align-items:center;gap:0.5rem">
+        <div class="zoom-controls">
+          <button class="zoom-btn" id="zoom-out" title="Zoom out">−</button>
+          <span class="zoom-level" id="zoom-level">${Math.round(currentPdfZoom * 100)}%</span>
+          <button class="zoom-btn" id="zoom-in" title="Zoom in">+</button>
+        </div>
+        <span class="doc-ext-tag">${esc(ext.toUpperCase())}</span>
+      </div>`;
+
+    document.getElementById("zoom-in").addEventListener("click", () => {
+      currentPdfZoom = Math.min(3.0, +(currentPdfZoom + 0.25).toFixed(2));
+      renderPdfPages(body);
+    });
+    document.getElementById("zoom-out").addEventListener("click", () => {
+      currentPdfZoom = Math.max(0.4, +(currentPdfZoom - 0.25).toFixed(2));
+      renderPdfPages(body);
+    });
 
     body.innerHTML = `<div class="doc-placeholder"><span class="spinner"></span></div>`;
 
-    if (ext !== "pdf") {
-      try {
-        const r    = await fetch(url);
-        const text = await r.text();
-        body.innerHTML = `<div class="doc-text">${esc(text)}</div>`;
-      } catch (e) {
-        body.innerHTML = `<div class="doc-placeholder"><p>Failed to load: ${esc(e.message)}</p></div>`;
-      }
-      return;
-    }
-
-    // PDF via PDF.js
-    if (typeof pdfjsLib === "undefined") {
-      body.innerHTML = `<iframe src="${esc(url)}" title="${esc(fileName)}"></iframe>`;
-      return;
-    }
-
     try {
-      const pdf = await pdfjsLib.getDocument(url).promise;
-      const viewer = document.createElement("div");
-      viewer.className = "pdf-viewer-wrap";
-      body.innerHTML = "";
-      body.appendChild(viewer);
-
-      for (let p = 1; p <= pdf.numPages; p++) {
-        const page   = await pdf.getPage(p);
-        const vpBase = page.getViewport({ scale: 1 });
-        const scale  = Math.max(0.6, (body.clientWidth - 16) / vpBase.width);
-        const vp     = page.getViewport({ scale });
-
-        const pageWrap = document.createElement("div");
-        pageWrap.className = "pdf-page-wrap";
-        pageWrap.style.width  = vp.width  + "px";
-        pageWrap.style.height = vp.height + "px";
-
-        const canvas = document.createElement("canvas");
-        canvas.width  = vp.width;
-        canvas.height = vp.height;
-        await page.render({ canvasContext: canvas.getContext("2d"), viewport: vp }).promise;
-        pageWrap.appendChild(canvas);
-
-        const textLayerDiv = document.createElement("div");
-        textLayerDiv.className = "textLayer";
-        const textContent = await page.getTextContent();
-        await pdfjsLib.renderTextLayer({
-          textContent,
-          container: textLayerDiv,
-          viewport: vp,
-          textDivs: [],
-        }).promise;
-        pageWrap.appendChild(textLayerDiv);
-        viewer.appendChild(pageWrap);
+      if (currentPdfFile !== fileName) {
+        currentPdfDoc  = await pdfjsLib.getDocument(url).promise;
+        currentPdfFile = fileName;
       }
-
-      if (highlightTexts && highlightTexts.length) {
-        highlightInPdf(viewer, highlightTexts);
-      }
+      await renderPdfPages(body);
     } catch (e) {
       body.innerHTML = `<div class="doc-placeholder"><p>Failed to load PDF: ${esc(e.message)}</p></div>`;
+    }
+  }
+
+  async function renderPdfPages(body) {
+    if (!currentPdfDoc) return;
+    document.getElementById("zoom-level").textContent =
+      Math.round(currentPdfZoom * 100) + "%";
+
+    const viewer = document.createElement("div");
+    viewer.className = "pdf-viewer-wrap";
+    body.innerHTML = "";
+    body.appendChild(viewer);
+
+    const fitWidth = (body.clientWidth || 400) - 16;
+
+    for (let p = 1; p <= currentPdfDoc.numPages; p++) {
+      const page   = await currentPdfDoc.getPage(p);
+      const vpBase = page.getViewport({ scale: 1 });
+      const fitScale = fitWidth / vpBase.width;
+      const scale  = Math.max(0.4, fitScale * currentPdfZoom);
+      const vp     = page.getViewport({ scale });
+
+      const pageWrap = document.createElement("div");
+      pageWrap.className = "pdf-page-wrap";
+      pageWrap.style.width  = vp.width  + "px";
+      pageWrap.style.height = vp.height + "px";
+
+      const canvas = document.createElement("canvas");
+      canvas.width  = vp.width;
+      canvas.height = vp.height;
+      await page.render({ canvasContext: canvas.getContext("2d"), viewport: vp }).promise;
+      pageWrap.appendChild(canvas);
+
+      const textLayerDiv = document.createElement("div");
+      textLayerDiv.className = "textLayer";
+      const textContent = await page.getTextContent();
+      await pdfjsLib.renderTextLayer({
+        textContent, container: textLayerDiv, viewport: vp, textDivs: [],
+      }).promise;
+      pageWrap.appendChild(textLayerDiv);
+      viewer.appendChild(pageWrap);
+    }
+
+    if (currentHighlightTexts && currentHighlightTexts.length) {
+      highlightInPdf(viewer, currentHighlightTexts);
     }
   }
 
